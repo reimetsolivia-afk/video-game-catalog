@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -93,6 +92,7 @@
 <body>
   <div class="container">
     <h1>🎮 Game Explorer</h1>
+
     <p class="subtitle">
       Discover video games using data from Wikidata.
     </p>
@@ -120,7 +120,7 @@
       <button onclick="searchGames()">Search games</button>
     </div>
 
-    <p id="status">Loading games... This might take a couple of minutes</p>
+    <p id="status">Ready to search.</p>
     <div id="results"></div>
   </div>
 
@@ -155,43 +155,58 @@
           FILTER(?date < "${end}-01-01T00:00:00Z"^^xsd:dateTime)
         `;
       } else {
-        filters += `OPTIONAL { ?game wdt:P577 ?date. }`;
+        filters += `
+          OPTIONAL { ?game wdt:P577 ?date. }
+        `;
       }
 
-     
-        const query = `
-          SELECT ?game ?gameLabel (MIN(?date) AS ?releaseDate)
-          WHERE {
-            hint:Query hint:optimizer "None" .
-        
-            ?game wdt:P31 wd:Q7889.
-            ${filters}
-        
-            FILTER NOT EXISTS {
-              ?game wdt:P31 wd:Q11424.
-            }
-        
-            SERVICE wikibase:label {
-              bd:serviceParam wikibase:language "[AUTO_LANGUAGE],mul,en".
-            }
-          }
-          GROUP BY ?game ?gameLabel
-          ORDER BY ?gameLabel
-          LIMIT 50
-        `;
+      const query = `
+        SELECT ?game ?gameLabel (MIN(?date) AS ?releaseDate)
+        WHERE {
+          hint:Query hint:optimizer "None" .
 
+          ?game wdt:P31 wd:Q7889.
+
+          ${filters}
+
+          FILTER NOT EXISTS {
+            ?game wdt:P31 wd:Q11424.
+          }
+
+          SERVICE wikibase:label {
+            bd:serviceParam wikibase:language "[AUTO_LANGUAGE],mul,en".
+          }
+        }
+        GROUP BY ?game ?gameLabel
+        ORDER BY ?gameLabel
+        LIMIT 50
+      `;
 
       try {
         const url =
           "https://query.wikidata.org/sparql?format=json&query=" +
           encodeURIComponent(query);
 
-        const response = await fetch(url, {
-          headers: { Accept: "application/sparql-results+json" }
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000);
+
+        let response;
+
+        try {
+          response = await fetch(url, {
+            headers: {
+              Accept: "application/sparql-results+json"
+            },
+            signal: controller.signal
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
 
         if (!response.ok) {
-          throw new Error("Wikidata request failed: " + response.status);
+          throw new Error(
+            "Wikidata request failed: " + response.status
+          );
         }
 
         const data = await response.json();
@@ -213,12 +228,18 @@
           link.href = item.game.value;
           link.target = "_blank";
           link.rel = "noopener noreferrer";
-          link.textContent = item.gameLabel.value;
+
+          // Display the readable label, not the Wikidata URL.
+          const gameUrl = item.game.value;
+          const fallbackId = gameUrl.split("/").pop();
+
+          link.textContent =
+            item.gameLabel?.value || fallbackId;
 
           const date = document.createElement("div");
           date.className = "date";
 
-          if (item.releaseDate) {
+          if (item.releaseDate?.value) {
             date.textContent =
               "Release date: " +
               item.releaseDate.value.substring(0, 10);
@@ -230,12 +251,19 @@
           results.appendChild(card);
         }
       } catch (error) {
-        status.textContent =
-          "Could not load games. Please try again in a moment.";
+        if (error.name === "AbortError") {
+          status.textContent =
+            "The search took too long. Please try again.";
+        } else {
+          status.textContent =
+            "Could not load games. Please try again in a moment.";
+        }
+
         console.error(error);
       }
     }
 
+    // Run a search when the page opens.
     searchGames();
   </script>
 </body>
