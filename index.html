@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Game Explorer</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 850px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f4f2ee;
+      color: #252525;
+    }
+
+    h1 {
+      color: #6046a5;
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    select, button {
+      padding: 10px;
+      font-size: 15px;
+      border-radius: 5px;
+    }
+
+    select {
+      border: 1px solid #ccc;
+      background: white;
+    }
+
+    button {
+      background: #6046a5;
+      color: white;
+      border: 0;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #483482;
+    }
+
+    li {
+      background: white;
+      margin: 10px 0;
+      padding: 14px;
+      border-radius: 8px;
+    }
+
+    a {
+      color: #6046a5;
+    }
+
+    #status {
+      color: #555;
+    }
+  </style>
+
+  <script>
+    async function kysi() {
+      const genre = document.getElementById("genre").value;
+      const platform = document.getElementById("platform").value;
+      const decade = document.getElementById("decade").value;
+      const vastus = document.getElementById("vastus");
+      const status = document.getElementById("status");
+
+      vastus.innerHTML = "";
+      status.textContent = "Loading games...";
+
+      // Build the SPARQL filters from the user's choices.
+      let filters = "";
+
+      if (genre) {
+        filters += `?game wdt:P136 wd:${genre}.`;
+      }
+
+      if (platform) {
+        filters += `?game wdt:P400 wd:${platform}.`;
+      }
+
+      if (decade !== "") {
+        const start = Number(decade);
+        const end = start + 10;
+
+        filters += `
+          ?game wdt:P577 ?date.
+          FILTER(?date >= "${start}-01-01T00:00:00Z"^^xsd:dateTime)
+          FILTER(?date < "${end}-01-01T00:00:00Z"^^xsd:dateTime)
+        `;
+      } else {
+        filters += `
+          OPTIONAL {
+            ?game wdt:P577 ?date.
+          }
+        `;
+      }
+
+      // Construct the Wikidata query.
+      const query = `
+        SELECT ?game ?gameLabel
+               (MIN(?date) AS ?releaseDate)
+        WHERE {
+          ?game wdt:P31 wd:Q7889.
+
+          ${filters}
+
+          SERVICE wikibase:label {
+            bd:serviceParam wikibase:language "en".
+          }
+        }
+        GROUP BY ?game ?gameLabel
+        ORDER BY ?gameLabel
+        LIMIT 50
+      `;
+
+      const url =
+        "https://query.wikidata.org/sparql?format=json&query=" +
+        encodeURIComponent(query);
+
+      try {
+        const response = await fetch(url, {
+          headers: {
+            "Accept": "application/sparql-results+json"
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Wikidata request failed");
+        }
+
+        const data = await response.json();
+        const games = data.results.bindings;
+
+        vastus.innerHTML = "";
+
+        if (games.length === 0) {
+          status.textContent =
+            "No games found. Try changing your filters.";
+          return;
+        }
+
+        status.textContent =
+          "Found " + games.length + " results (maximum 50).";
+
+        // Display each game as a clickable list item.
+        for (const game of games) {
+          const li = document.createElement("li");
+          const link = document.createElement("a");
+
+          link.href = game.game.value;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.textContent = game.gameLabel.value;
+
+          li.appendChild(link);
+
+          if (game.releaseDate) {
+            const year = game.releaseDate.value.slice(0, 4);
+
+            li.appendChild(
+              document.createTextNode(" — Released: " + year)
+            );
+          } else {
+            li.appendChild(
+              document.createTextNode(" — Release year unknown")
+            );
+          }
+
+          vastus.appendChild(li);
+        }
+
+      } catch (error) {
+        console.error(error);
+
+        status.textContent =
+          "Could not load games. Please try again later.";
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <h1>🎮 Game Explorer</h1>
+
+  <p>
+    Discover video games using Wikidata.
+    Choose your preferences and explore the results.
+  </p>
+
+  <div class="filters">
+
+    <label for="genre">Genre:</label>
+    <select id="genre">
+      <option value="">All genres</option>
+      <option value="Q744038" selected>RPG</option>
+    </select>
+
+    <label for="platform">Platform:</label>
+    <select id="platform">
+      <option value="">All platforms</option>
+      <option value="Q1406" selected>PC (Windows)</option>
+    </select>
+
+    <label for="decade">Decade:</label>
+    <select id="decade">
+      <option value="">All decades</option>
+      <option value="1990">1990s</option>
+      <option value="2000">2000s</option>
+      <option value="2010" selected>2010s</option>
+      <option value="2020">2020s</option>
+    </select>
+
+    <button type="button" onclick="kysi()">Search</button>
+
+  </div>
+
+  <h2>Results</h2>
+
+  <p id="status" aria-live="polite">
+    Ready to search.
+  </p>
+
+  <ul id="vastus"></ul>
+
+  <script>
+    // Display the default search when the page opens.
+    kysi();
+  </script>
+</body>
+</html>
