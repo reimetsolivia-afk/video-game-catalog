@@ -1,82 +1,140 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game Explorer</title>
 
   <style>
     body {
       font-family: Arial, sans-serif;
+      background: #111827;
+      color: #e5e7eb;
+      margin: 0;
+      padding: 40px 20px;
+    }
+
+    .container {
       max-width: 850px;
-      margin: 40px auto;
-      padding: 20px;
-      background: #f4f2ee;
-      color: #252525;
+      margin: auto;
     }
 
     h1 {
-      color: #6046a5;
+      color: #a5b4fc;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #9ca3af;
+      margin-bottom: 28px;
     }
 
     .filters {
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
-      margin: 20px 0;
+      margin-bottom: 20px;
     }
 
     select, button {
-      padding: 10px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #374151;
+      background: #1f2937;
+      color: #f9fafb;
       font-size: 15px;
-      border-radius: 5px;
-    }
-
-    select {
-      border: 1px solid #ccc;
-      background: white;
     }
 
     button {
-      background: #6046a5;
-      color: white;
-      border: 0;
+      background: #6366f1;
+      border-color: #6366f1;
       cursor: pointer;
+      font-weight: bold;
     }
 
     button:hover {
-      background: #483482;
-    }
-
-    li {
-      background: white;
-      margin: 10px 0;
-      padding: 14px;
-      border-radius: 8px;
-    }
-
-    a {
-      color: #6046a5;
+      background: #4f46e5;
     }
 
     #status {
-      color: #555;
+      color: #9ca3af;
+      margin: 18px 0;
+    }
+
+    .game {
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .game a {
+      color: #a5b4fc;
+      font-size: 18px;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .game a:hover {
+      color: #c7d2fe;
+      text-decoration: underline;
+    }
+
+    .date {
+      color: #9ca3af;
+      font-size: 14px;
+      margin-top: 8px;
     }
   </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>🎮 Game Explorer</h1>
+    <p class="subtitle">
+      Discover video games using data from Wikidata.
+    </p>
+
+    <div class="filters">
+      <select id="genre" aria-label="Game genre">
+        <option value="">All genres</option>
+        <option value="Q744038">RPG</option>
+        <option value="Q188055" selected>Puzzle</option>
+      </select>
+
+      <select id="platform" aria-label="Game platform">
+        <option value="">All platforms</option>
+        <option value="Q1406">PC (Windows)</option>
+      </select>
+
+      <select id="decade" aria-label="Release decade">
+        <option value="">All decades</option>
+        <option value="1990">1990s</option>
+        <option value="2000">2000s</option>
+        <option value="2010">2010s</option>
+        <option value="2020" selected>2020s</option>
+      </select>
+
+      <button onclick="searchGames()">Search games</button>
+    </div>
+
+    <p id="status">Loading games... This might take a couple of minutes</p>
+    <div id="results"></div>
+  </div>
 
   <script>
-    async function kysi() {
+    async function searchGames() {
       const genre = document.getElementById("genre").value;
       const platform = document.getElementById("platform").value;
       const decade = document.getElementById("decade").value;
-      const vastus = document.getElementById("vastus");
+      const results = document.getElementById("results");
       const status = document.getElementById("status");
 
-      vastus.innerHTML = "";
-      status.textContent = "Loading games...";
+      results.replaceChildren();
+      status.textContent = "Searching Wikidata...";
 
-      // Build the SPARQL filters from the user's choices.
       let filters = "";
 
       if (genre) {
@@ -97,21 +155,20 @@
           FILTER(?date < "${end}-01-01T00:00:00Z"^^xsd:dateTime)
         `;
       } else {
-        filters += `
-          OPTIONAL {
-            ?game wdt:P577 ?date.
-          }
-        `;
+        filters += `OPTIONAL { ?game wdt:P577 ?date. }`;
       }
 
-      // Construct the Wikidata query.
       const query = `
-        SELECT ?game ?gameLabel
-               (MIN(?date) AS ?releaseDate)
+        SELECT ?game ?gameLabel (MIN(?date) AS ?releaseDate)
         WHERE {
-          ?game wdt:P31 wd:Q7889.
+          hint:Query hint:optimizer "None" .
 
+          ?game wdt:P31 wd:Q7889.
           ${filters}
+
+          FILTER NOT EXISTS {
+            ?game wdt:P31 wd:Q11424.
+          }
 
           SERVICE wikibase:label {
             bd:serviceParam wikibase:language "en".
@@ -122,25 +179,21 @@
         LIMIT 50
       `;
 
-      const url =
-        "https://query.wikidata.org/sparql?format=json&query=" +
-        encodeURIComponent(query);
-
       try {
+        const url =
+          "https://query.wikidata.org/sparql?format=json&query=" +
+          encodeURIComponent(query);
+
         const response = await fetch(url, {
-          headers: {
-            "Accept": "application/sparql-results+json"
-          }
+          headers: { Accept: "application/sparql-results+json" }
         });
 
         if (!response.ok) {
-          throw new Error("Wikidata request failed");
+          throw new Error("Wikidata request failed: " + response.status);
         }
 
         const data = await response.json();
         const games = data.results.bindings;
-
-        vastus.innerHTML = "";
 
         if (games.length === 0) {
           status.textContent =
@@ -148,92 +201,40 @@
           return;
         }
 
-        status.textContent =
-          "Found " + games.length + " results (maximum 50).";
+        status.textContent = `Found ${games.length} games:`;
 
-        // Display each game as a clickable list item.
-        for (const game of games) {
-          const li = document.createElement("li");
+        for (const item of games) {
+          const card = document.createElement("div");
+          card.className = "game";
+
           const link = document.createElement("a");
-
-          link.href = game.game.value;
+          link.href = item.game.value;
           link.target = "_blank";
-          link.rel = "noopener";
-          link.textContent = game.gameLabel.value;
+          link.rel = "noopener noreferrer";
+          link.textContent = item.gameLabel.value;
 
-          li.appendChild(link);
+          const date = document.createElement("div");
+          date.className = "date";
 
-          if (game.releaseDate) {
-            const year = game.releaseDate.value.slice(0, 4);
-
-            li.appendChild(
-              document.createTextNode(" — Released: " + year)
-            );
+          if (item.releaseDate) {
+            date.textContent =
+              "Release date: " +
+              item.releaseDate.value.substring(0, 10);
           } else {
-            li.appendChild(
-              document.createTextNode(" — Release year unknown")
-            );
+            date.textContent = "Release date not available";
           }
 
-          vastus.appendChild(li);
+          card.append(link, date);
+          results.appendChild(card);
         }
-
       } catch (error) {
-        console.error(error);
-
         status.textContent =
-          "Could not load games. Please try again later.";
+          "Could not load games. Please try again in a moment.";
+        console.error(error);
       }
     }
-  </script>
-</head>
 
-<body>
-  <h1>🎮 Game Explorer</h1>
-
-  <p>
-    Discover video games using Wikidata.
-    Choose your preferences and explore the results.
-  </p>
-
-  <div class="filters">
-
-    <label for="genre">Genre:</label>
-    <select id="genre">
-      <option value="">All genres</option>
-      <option value="Q744038" selected>RPG</option>
-    </select>
-
-    <label for="platform">Platform:</label>
-    <select id="platform">
-      <option value="">All platforms</option>
-      <option value="Q1406" selected>PC (Windows)</option>
-    </select>
-
-    <label for="decade">Decade:</label>
-    <select id="decade">
-      <option value="">All decades</option>
-      <option value="1990">1990s</option>
-      <option value="2000">2000s</option>
-      <option value="2010" selected>2010s</option>
-      <option value="2020">2020s</option>
-    </select>
-
-    <button type="button" onclick="kysi()">Search</button>
-
-  </div>
-
-  <h2>Results</h2>
-
-  <p id="status" aria-live="polite">
-    Ready to search.
-  </p>
-
-  <ul id="vastus"></ul>
-
-  <script>
-    // Display the default search when the page opens.
-    kysi();
+    searchGames();
   </script>
 </body>
 </html>
