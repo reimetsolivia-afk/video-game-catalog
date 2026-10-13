@@ -158,26 +158,28 @@
         filters += `OPTIONAL { ?game wdt:P577 ?date. }`;
       }
 
-      const query = `
-        SELECT ?game ?gameLabel (MIN(?date) AS ?releaseDate)
-        WHERE {
-          hint:Query hint:optimizer "None" .
-
-          ?game wdt:P31 wd:Q7889.
-          ${filters}
-
-          FILTER NOT EXISTS {
-            ?game wdt:P31 wd:Q11424.
+     
+        const query = `
+          SELECT ?game ?gameLabel (MIN(?date) AS ?releaseDate)
+          WHERE {
+            hint:Query hint:optimizer "None" .
+        
+            ?game wdt:P31 wd:Q7889.
+            ${filters}
+        
+            FILTER NOT EXISTS {
+              ?game wdt:P31 wd:Q11424.
+            }
+        
+            SERVICE wikibase:label {
+              bd:serviceParam wikibase:language "[AUTO_LANGUAGE],mul,en".
+            }
           }
+          GROUP BY ?game ?gameLabel
+          ORDER BY ?gameLabel
+          LIMIT 50
+        `;
 
-          SERVICE wikibase:label {
-            bd:serviceParam wikibase:language "en".
-          }
-        }
-        GROUP BY ?game ?gameLabel
-        ORDER BY ?gameLabel
-        LIMIT 50
-      `;
 
       try {
         const url =
