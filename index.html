@@ -160,19 +160,13 @@
         `;
       }
 
-      const query = `
+       const query = `
         SELECT ?game ?gameLabel (MIN(?date) AS ?releaseDate)
         WHERE {
-          hint:Query hint:optimizer "None" .
-
           ?game wdt:P31 wd:Q7889.
-
+      
           ${filters}
-
-          FILTER NOT EXISTS {
-            ?game wdt:P31 wd:Q11424.
-          }
-
+      
           SERVICE wikibase:label {
             bd:serviceParam wikibase:language "[AUTO_LANGUAGE],mul,en".
           }
@@ -188,7 +182,6 @@
           encodeURIComponent(query);
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30000);
 
         let response;
 
@@ -263,8 +256,6 @@
       }
     }
 
-    // Run a search when the page opens.
-    searchGames();
   </script>
 </body>
 </html>
