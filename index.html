@@ -182,6 +182,7 @@
           encodeURIComponent(query);
 
         const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 55000);
 
         let response;
 
