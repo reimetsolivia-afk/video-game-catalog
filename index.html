@@ -111,12 +111,6 @@
         <option value="Q868217">Racing</option> 
       </select>
 
-      <select id="platform" aria-label="Game platform">
-        <option value="">All platforms</option>
-        <option value="Q1406">PC (Windows)</option>
-        <option value="Q8076">Console</option> 
-      </select>
-
       <select id="decade" aria-label="Release decade">
         <option value="">All decades</option>
         <option value="1990">1990s</option>
@@ -135,7 +129,6 @@
   <script>
     async function searchGames() {
       const genre = document.getElementById("genre").value;
-      const platform = document.getElementById("platform").value;
       const decade = document.getElementById("decade").value;
       const results = document.getElementById("results");
       const status = document.getElementById("status");
@@ -147,10 +140,6 @@
 
       if (genre) {
         filters += `?game wdt:P136 wd:${genre}.`;
-      }
-
-      if (platform) {
-        filters += `?game wdt:P400 wd:${platform}.`;
       }
 
       if (decade !== "") {
